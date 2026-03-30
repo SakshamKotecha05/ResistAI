@@ -1,0 +1,32 @@
+# ResistAI — Antibiotic Resistance Prediction
+# Install all dependencies with: pip install -r requirements.txt
+
+# Web framework — FastAPI backend
+fastapi==0.111.0
+uvicorn==0.29.0          # ASGI server that runs FastAPI
+pydantic==2.7.1          # Input validation for API endpoints
+
+# Frontend
+streamlit==1.35.0        # Python-only UI framework
+plotly==5.22.0           # Interactive charts (SHAP bar chart, confidence gauge)
+
+# Machine learning
+scikit-learn==1.5.0      # Random Forest classifier + preprocessing utilities
+xgboost==2.0.3           # XGBoost classifier (faster and often more accurate than RF)
+joblib==1.4.2            # Save and load model.pkl efficiently
+
+# Explainability
+shap==0.45.1             # SHAP feature importance (TreeExplainer for tree models)
+
+# Data processing
+pandas==2.2.2            # DataFrame operations — loading, cleaning, transforming
+numpy==1.26.4            # Numerical operations used internally by ML libraries
+
+# LLM integration
+groq>=0.13.0             # Official Groq Python SDK for Llama 3.3 70B API calls
+httpx>=0.27.0,<0.28.0   # Pinned: groq SDK incompatible with httpx 0.28+ (proxies removal)
+
+# Utilities
+python-dotenv==1.0.1     # Load API keys from .env file safely
+requests==2.32.2         # HTTP calls from Streamlit to FastAPI
+imbalanced-learn==0.12.3 # SMOTE oversampling for class imbalance (Secondary feature)

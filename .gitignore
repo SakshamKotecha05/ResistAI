@@ -1,0 +1,49 @@
+# ── API Keys ────────────────────────────────────────────────
+# NEVER commit this — it contains your Groq API key
+.env
+
+# ── Dataset Files ────────────────────────────────────────────
+# Datasets are downloaded locally, not committed (licensing + file size)
+data/*.csv
+data/*.xlsx
+data/*.json
+data/*.tsv
+data/*.zip
+
+# ── Trained Model ────────────────────────────────────────────
+# Regenerate with: python ml/train.py
+# Commit only if file is under 50MB
+ml/model.pkl
+
+# ── Python Cache ─────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# ── Virtual Environment ──────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── IDE Files ────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── OS Files ─────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Jupyter Notebooks (not used in this project) ─────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# Internal planning files
+CodeCure Biohackathon Problem Statement.pdf
+ideas1.md
+ideas_v2.md
+CLAUDE.md
