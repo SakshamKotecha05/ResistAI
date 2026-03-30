@@ -30,6 +30,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 
 from app.predict import predict as run_predict
+from app.llm import generate_clinical_report
 
 # ── FastAPI App Instance ──────────────────────────────────────────────────────
 
@@ -133,6 +134,25 @@ class PredictResponse(BaseModel):
     top_features:   List[TopFeature] # top 3 SHAP-explained features
 
 
+class RecommendResponse(BaseModel):
+    """
+    Response schema for the /recommend endpoint.
+    Combines the full ML prediction with the Groq LLM clinical recommendation.
+    The frontend only needs to call one endpoint to render the complete UI.
+    """
+    # ── ML prediction fields (same as PredictResponse) ──
+    prediction:     str
+    confidence:     float
+    threshold_used: float
+    top_features:   List[TopFeature]
+
+    # ── LLM recommendation fields ──
+    recommendation: str   # Full LLM text: clinical summary + alternatives + risk flag
+    model_used:     str   # "llama-3.3-70b-versatile" or "fallback"
+    prompt_tokens:  int   # Groq prompt tokens used (for rate-limit awareness)
+    fallback_used:  bool  # True if Groq failed and fallback text was returned
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @app.get("/health")
@@ -148,7 +168,7 @@ def health_check():
 @app.post("/predict", response_model=PredictResponse)
 def predict(request: PredictRequest):
     """
-    Main prediction endpoint.
+    ML-only prediction endpoint.
 
     Flow:
     1. FastAPI validates the request body against PredictRequest schema
@@ -164,8 +184,40 @@ def predict(request: PredictRequest):
         result = run_predict(input_data)
         return result
     except Exception as e:
-        # Return a structured error instead of crashing the server
         raise HTTPException(
             status_code=500,
             detail=f"Prediction failed: {str(e)}"
+        )
+
+
+@app.post("/recommend", response_model=RecommendResponse)
+def recommend(request: PredictRequest):
+    """
+    Combined ML + LLM clinical decision endpoint.
+
+    This is the main endpoint the Streamlit frontend calls.
+    It runs the full pipeline in one request:
+      1. ML inference + SHAP (predict.py)
+      2. Groq LLM clinical recommendation (llm.py)
+
+    Why combine into one endpoint?
+    The frontend needs both outputs at the same time to render the full UI.
+    One round-trip is simpler and faster than two sequential calls from Streamlit.
+
+    Fallback behavior:
+    If Groq is unavailable (rate-limited, network error), the LLM fields still
+    return a graceful fallback message. The ML prediction is always returned.
+    """
+    try:
+        input_data   = request.model_dump()
+        ml_result    = run_predict(input_data)
+        llm_result   = generate_clinical_report(ml_result, input_data)
+
+        # Merge ML result and LLM result into a single flat response dict
+        return {**ml_result, **llm_result}
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Recommendation failed: {str(e)}"
         )
