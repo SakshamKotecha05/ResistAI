@@ -216,7 +216,7 @@ EXAMPLE_PATIENT = {
     "prior_hospitalization":      1,
     "infection_freq":             3.0,
     "species":                    "Escherichia coli",
-    "location":                   "ICU",
+    "location":                   "IFE-C",
 }
 
 BLANK_PATIENT = {
@@ -239,8 +239,8 @@ BLANK_PATIENT = {
     "has_hypertension":           0,
     "prior_hospitalization":      0,
     "infection_freq":             0.0,
-    "species":                    "",
-    "location":                   "",
+    "species":                    None,
+    "location":                   None,
 }
 
 
@@ -400,34 +400,23 @@ def render_verdict_card(prediction: str, confidence: float, threshold: float):
         anim_prop    = "animation:glow-r 3s ease-in-out infinite;"
     else:
         color        = "#00F096"
-        bg           = "rgba(0,240,150,0.06)"
-        border_color = "rgba(0,240,150,0.30)"
+        bg           = "rgba(0,240,150,0.07)"
+        border_color = "rgba(0,240,150,0.40)"
         border_left  = "#00F096"
         label        = "SUSCEPTIBLE"
         sub          = "to Ciprofloxacin — standard dosing protocol may apply"
         icon         = "✓"
-        anim_kf      = ""
-        anim_prop    = ""
+        anim_kf      = """@keyframes glow-s {
+          0%,100%{box-shadow:0 0 0 0 rgba(0,240,150,0),0 0 0 0 rgba(0,240,150,0);}
+          50%{box-shadow:0 0 22px 2px rgba(0,240,150,0.10),inset 0 0 20px rgba(0,240,150,0.04);}
+        }"""
+        anim_prop    = "animation:glow-s 3s ease-in-out infinite;"
 
     gauge = make_gauge_svg(confidence, color)
     thr   = f"{round(threshold * 100)}%"
 
-    st.markdown(f"""
-<style>{anim_kf}</style>
-<div style="
-  background:{bg};
-  border:1px solid {border_color};
-  border-left:4px solid {border_left};
-  border-radius:8px;
-  padding:22px 28px;
-  margin-bottom:22px;
-  display:flex;
-  align-items:center;
-  gap:28px;
-  position:relative;
-  overflow:hidden;
-  {anim_prop}
-">
+    st.markdown(f"""<style>{anim_kf}</style>
+<div style="background:{bg};border:1px solid {border_color};border-left:4px solid {border_left};border-radius:8px;padding:22px 28px;margin-bottom:22px;display:flex;align-items:center;gap:28px;position:relative;overflow:hidden;{anim_prop}">
   <!-- Radial glow overlay -->
   <div style="position:absolute;top:0;left:0;right:0;bottom:0;
     background:radial-gradient(ellipse at top left,{bg.replace('0.07','0.13')} 0%,transparent 60%);
@@ -522,10 +511,10 @@ def render_shap_chart(top_features: list):
 
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
     st.markdown(
-        '<p style="font-size:0.71rem;color:#3A5870;font-family:\'Source Sans 3\',sans-serif;margin-top:-6px;">'
+        '<div style="font-size:0.71rem;color:#3A5870;font-family:\'Source Sans 3\',sans-serif;margin-top:-6px;">'
         '<span style="color:#FF2B4E;">■</span> Increases resistance risk &nbsp;·&nbsp;'
         '<span style="color:#00F096;">■</span> Decreases resistance risk &nbsp;·&nbsp;'
-        'Bar length = feature importance</p>',
+        'Bar length = feature importance</div>',
         unsafe_allow_html=True,
     )
 
@@ -618,10 +607,10 @@ def render_results(result: dict):
     foot_col, btn_col = st.columns([5, 1])
     with foot_col:
         st.markdown(
-            f'<p style="font-family:\'JetBrains Mono\',monospace;font-size:0.69rem;color:#3A5870;margin:4px 0;">'
+            f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:0.69rem;color:#3A5870;margin:4px 0;">'
             f'model: <span style="color:#6A8BA8;">{model_used}</span> &nbsp;·&nbsp;'
             f'tokens: <span style="color:#6A8BA8;">{tokens}</span> &nbsp;·&nbsp;'
-            f'ResistAI v1.0 — research and educational use only</p>',
+            f'ResistAI v1.0 — research and educational use only</div>',
             unsafe_allow_html=True,
         )
     with btn_col:
@@ -766,11 +755,31 @@ def render_sidebar() -> tuple:
         unsafe_allow_html=True,
     )
 
-    species  = st.sidebar.text_input(
-        "Bacterial species", placeholder="e.g. Escherichia coli", key="species"
+    species = st.sidebar.selectbox(
+        "Bacterial species",
+        options=[
+            "Escherichia coli",
+            "Klebsiella pneumoniae",
+            "Proteus mirabilis",
+            "Citrobacter spp.",
+            "Enterobacteria spp.",
+            "Other",
+        ],
+        index=None,
+        placeholder="Select species...",
+        key="species",
     )
-    location = st.sidebar.text_input(
-        "Sample location", placeholder="e.g. ICU, Urology, Outpatient", key="location"
+    location = st.sidebar.selectbox(
+        "Sample location",
+        options=[
+            "EDE-C", "EDE-S", "EDE-T",
+            "IFE-C", "IFE-S", "IFE-T",
+            "IWO-C", "IWO-S", "IWO-T",
+            "OSU-C", "OSU-S", "OSU-T",
+        ],
+        index=None,
+        placeholder="Select location...",
+        key="location",
     )
 
     st.sidebar.divider()
@@ -820,8 +829,8 @@ def main():
 
     if not api_ok:
         st.sidebar.markdown(
-            '<p style="font-size:0.74rem;color:#3A5870;text-align:center;'
-            'font-family:\'Source Sans 3\',sans-serif;">Start the backend to enable analysis.</p>',
+            '<div style="font-size:0.74rem;color:#3A5870;text-align:center;'
+            'font-family:\'Source Sans 3\',sans-serif;">Start the backend to enable analysis.</div>',
             unsafe_allow_html=True,
         )
 

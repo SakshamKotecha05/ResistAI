@@ -55,8 +55,8 @@ FastAPI /recommend endpoint
 
 **1. Clone the repository**
 ```bash
-git clone <repo-url>
-cd codecure-amr
+git clone https://github.com/SakshamKotecha05/ResistAI
+cd ResistAI
 ```
 
 **2. Create and activate a virtual environment**
@@ -92,13 +92,15 @@ Open **two terminals** from the project root:
 
 **Terminal 1 — Backend (FastAPI)**
 ```bash
-venv\Scripts\uvicorn app.main:app --reload
+venv\Scripts\uvicorn app.main:app --reload   # Windows
+# uvicorn app.main:app --reload              # macOS / Linux
 ```
 API runs at `http://localhost:8000` · Swagger docs at `http://localhost:8000/docs`
 
 **Terminal 2 — Frontend (Streamlit)**
 ```bash
-venv\Scripts\streamlit run frontend/streamlit_app.py
+venv\Scripts\streamlit run frontend/streamlit_app.py   # Windows
+# streamlit run frontend/streamlit_app.py               # macOS / Linux
 ```
 UI opens at `http://localhost:8501`
 
@@ -118,6 +120,19 @@ The results panel shows:
 - **Clinical Decision Support** — LLM-generated summary, alternative antibiotic options, and a chart-ready risk flag
 
 Use **⚡ Load Example Patient** to instantly populate a demo case (E. coli, ICU, female/45/diabetic) that reliably produces a Resistant prediction.
+
+---
+
+## Screenshots
+
+**Dashboard — empty state (no isolate loaded)**
+![Dashboard empty state](assets/screenshots/01-dashboard-empty.png)
+
+**Resistant prediction with SHAP feature analysis and clinical decision support**
+![Resistant prediction result](assets/screenshots/02-resistant-result.png)
+
+**Susceptible prediction**
+![Susceptible prediction result](assets/screenshots/03-susceptible-result.png)
 
 ---
 
