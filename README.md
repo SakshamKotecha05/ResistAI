@@ -160,15 +160,15 @@ Datasets are not committed to this repository. Download them and place CSV files
 
 ## Tech Stack
 
-| Layer           | Technology               | Role                                       |
-| --------------- | ------------------------ | ------------------------------------------ |
-| Frontend        | Streamlit                | Clinical UI — pure Python, no JS           |
-| Backend         | FastAPI                  | REST API with Pydantic validation          |
-| ML Model        | sklearn (Random Forest)  | Resistance classification                  |
-| Explainability  | SHAP (TreeExplainer)     | Feature importance with biological context |
-| LLM Layer       | Groq API — Llama 3.3 70B | Clinical recommendation generation         |
-| Visualizations  | Plotly                   | Interactive SHAP bar chart                 |
-| Data Processing | pandas, numpy            | Preprocessing and feature engineering      |
+| Layer           | Technology              | Role                                       |
+| --------------- | ----------------------- | ------------------------------------------ |
+| Frontend        | Streamlit               | Clinical UI pure Python, no JS             |
+| Backend         | FastAPI                 | REST API with Pydantic validation          |
+| ML Model        | sklearn (Random Forest) | Resistance classification                  |
+| Explainability  | SHAP (TreeExplainer)    | Feature importance with biological context |
+| LLM Layer       | Groq API Llama 3.3 70B  | Clinical recommendation generation         |
+| Visualizations  | Plotly                  | Interactive SHAP bar chart                 |
+| Data Processing | pandas, numpy           | Preprocessing and feature engineering      |
 
 ---
 
@@ -177,10 +177,10 @@ Datasets are not committed to this repository. Download them and place CSV files
 ```
 codecure-amr/
 ├── app/
-│   ├── main.py          # FastAPI entry point — /predict and /recommend endpoints
+│   ├── main.py          # FastAPI entry point /predict and /recommend endpoints
 │   ├── predict.py       # ML inference + SHAP explanation engine
 │   ├── llm.py           # Groq clinical decision layer
-│   └── utils.py         # SHAP-to-biology bridge (feature labels + biological context)
+│   └── utils.py         # SHAP to biology bridge (feature labels + biological context)
 ├── ml/
 │   ├── train.py         # Model training script
 │   ├── preprocess.py    # Data cleaning and feature engineering
@@ -188,11 +188,11 @@ codecure-amr/
 ├── frontend/
 │   └── streamlit_app.py # Streamlit UI
 ├── data/                # Datasets (gitignored)
-├── .env                 # API keys (gitignored — never committed)
+├── .env                 # API keys (gitignored never committed)
 ├── requirements.txt
 └── README.md
 ```
 
 ---
 
-_Built for CodeCure @ IIT BHU SPIRIT 2026 — Track B: Antibiotic Resistance Prediction_
+_Built for CodeCure @ IIT BHU SPIRIT 2026 Track B: Antibiotic Resistance Prediction_
