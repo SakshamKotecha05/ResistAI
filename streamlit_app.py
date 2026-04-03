@@ -743,7 +743,4 @@ def main():
         render_empty_state()
 
 
-if __name__ == "__main__":
-    main()
-
 main()
