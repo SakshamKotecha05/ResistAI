@@ -10,10 +10,9 @@ data/*.json
 data/*.tsv
 data/*.zip
 
-# ── Trained Model ────────────────────────────────────────────
-# Regenerate with: python ml/train.py
-# Commit only if file is under 50MB
-ml/model.pkl
+# ── Streamlit Cloud Secrets ──────────────────────────────────
+# Local dev only — set GROQ_API_KEY via Streamlit Cloud dashboard instead
+.streamlit/secrets.toml
 
 # ── Python Cache ─────────────────────────────────────────────
 __pycache__/
@@ -47,3 +46,4 @@ CodeCure Biohackathon Problem Statement.pdf
 ideas1.md
 ideas_v2.md
 CLAUDE.md
+round2/
