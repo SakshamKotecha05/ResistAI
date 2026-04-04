@@ -2,6 +2,8 @@
 
 > An AI-powered tool that predicts Ciprofloxacin resistance in bacterial isolates, explains the biological reasoning behind each prediction, and recommends alternative antibiotics in plain clinical language.
 
+**Live demo:** https://resistai-2026.streamlit.app/
+
 ## The Problem
 
 Antimicrobial resistance (AMR) is one of the most urgent threats in global healthcare. Bacteria evolve resistance faster than new antibiotics are developed, and clinicians must choose antibiotics under time pressure with incomplete resistance data.
