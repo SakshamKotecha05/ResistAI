@@ -43,7 +43,12 @@ load_dotenv(dotenv_path=_ENV_PATH, override=True)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-GROQ_MODEL    = "llama-3.3-70b-versatile"   # Best reasoning model on Groq free tier
+# Tried in order — first one that succeeds is used. Guards against model deprecations.
+GROQ_MODELS = [
+    "llama-3.3-70b-versatile",
+    "llama3-70b-8192",
+    "gemma2-9b-it",
+]
 TEMPERATURE   = 0.3                          # Low = consistent clinical language
 MAX_TOKENS    = 600                          # Enough for 3-section response, not wasteful
 
@@ -168,23 +173,19 @@ RISK FLAG:
 
 # ── Groq API Call ─────────────────────────────────────────────────────────────
 
-def get_recommendation(prompt: str) -> tuple[str, int]:
+def get_recommendation(prompt: str) -> tuple[str, int, str]:
     """
-    Sends the prompt to Groq's Llama 3.3 70B model and returns the response.
+    Sends the prompt to Groq and returns the response.
+    Tries each model in GROQ_MODELS in order — moves to the next if one fails.
 
     Args:
         prompt: the fully assembled prompt string from build_prompt()
 
     Returns:
-        tuple of (response_text: str, prompt_tokens_used: int)
+        tuple of (response_text: str, prompt_tokens_used: int, model_used: str)
 
     Raises:
-        Exception if the Groq call fails (caller handles this with fallback)
-
-    Why use the system role vs. putting everything in user?
-    The "system" role sets persistent behavioral context for the model —
-    it's more reliable for maintaining tone and format than putting everything
-    in the user message. We keep it minimal here since all detail is in the prompt.
+        Exception if all models fail (caller handles this with fallback)
     """
 
     api_key = os.getenv("GROQ_API_KEY")
@@ -195,30 +196,37 @@ def get_recommendation(prompt: str) -> tuple[str, int]:
         )
 
     client = Groq(api_key=api_key)
+    last_error = None
 
-    response = client.chat.completions.create(
-        model=GROQ_MODEL,
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "You are a senior clinical microbiologist. Provide evidence-based, "
-                    "concise antibiotic guidance. Follow the output format exactly."
-                )
-            },
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ],
-        temperature=TEMPERATURE,
-        max_tokens=MAX_TOKENS,
-    )
+    for model in GROQ_MODELS:
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a senior clinical microbiologist. Provide evidence-based, "
+                            "concise antibiotic guidance. Follow the output format exactly."
+                        )
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=TEMPERATURE,
+                max_tokens=MAX_TOKENS,
+            )
+            text        = response.choices[0].message.content.strip()
+            tokens_used = response.usage.prompt_tokens if response.usage else 0
+            print(f"[llm] Success with model: {model}")
+            return text, tokens_used, model
+        except Exception as e:
+            print(f"[llm] Model {model} failed: {e}")
+            last_error = e
 
-    text         = response.choices[0].message.content.strip()
-    tokens_used  = response.usage.prompt_tokens if response.usage else 0
-
-    return text, tokens_used
+    raise last_error
 
 
 # ── Public Interface ───────────────────────────────────────────────────────────
@@ -247,23 +255,25 @@ def generate_clinical_report(predict_result: dict, input_data: dict) -> dict:
     """
 
     try:
-        prompt              = build_prompt(predict_result, input_data)
-        recommendation, tokens = get_recommendation(prompt)
+        prompt                       = build_prompt(predict_result, input_data)
+        recommendation, tokens, model = get_recommendation(prompt)
 
         return {
             "recommendation": recommendation,
-            "model_used":     GROQ_MODEL,
+            "model_used":     model,
             "prompt_tokens":  tokens,
             "fallback_used":  False,
+            "error":          None,
         }
 
     except Exception as e:
-        # Log the error server-side so we can debug, but don't crash the API
-        print(f"[llm] Groq call failed: {e}")
+        error_msg = str(e)
+        print(f"[llm] Groq call failed: {error_msg}")
 
         return {
             "recommendation": FALLBACK_TEXT,
             "model_used":     "fallback",
             "prompt_tokens":  0,
             "fallback_used":  True,
+            "error":          error_msg,
         }

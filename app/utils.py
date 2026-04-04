@@ -150,6 +150,45 @@ FEATURE_LABELS = {
         "biology": "Internal flag indicating primary (Mendeley) or secondary (Kaggle) dataset; "
                    "not a true clinical feature but captures dataset-level batch effects."
     },
+
+    # ── Engineered Features ────────────────────────────────────────────────────
+
+    "fluoro_cotrim_coresistance": {
+        "label":   "Fluoro + Cotrim Co-resistance",
+        "biology": "Ofloxacin and Co-trimoxazole resistance co-occurring on the same isolate "
+                   "is the strongest plasmid-linked signal for Ciprofloxacin resistance — "
+                   "both resistances are frequently encoded on the same integron in gram-negative UTI pathogens."
+    },
+    "esbl_pattern": {
+        "label":   "ESBL resistance pattern",
+        "biology": "Ceftazidime and Augmentin resistance together define the classic Extended-Spectrum "
+                   "Beta-Lactamase (ESBL) phenotype. ESBL-producing strains frequently co-carry "
+                   "fluoroquinolone resistance genes on the same resistance plasmid."
+    },
+    "extreme_resistance": {
+        "label":   "Last-Resort Drug Resistance",
+        "biology": "Resistance to Imipenem (carbapenem) or Colistin (polymyxin) signals an extensively "
+                   "drug-resistant or pan-resistant profile — strains with last-resort resistance almost "
+                   "universally carry resistance to all other antibiotic classes including fluoroquinolones."
+    },
+    "aminoglycoside_coresistance": {
+        "label":   "Aminoglycoside Co-resistance",
+        "biology": "Gentamicin and Amikacin both resistant indicates high-level aminoglycoside-modifying "
+                   "enzyme activity. These enzymes are often encoded on mobile genetic elements that also "
+                   "carry fluoroquinolone resistance determinants."
+    },
+    "total_resistance_count": {
+        "label":   "MDR Score",
+        "biology": "Total number of antibiotics this isolate is resistant to across all 13 tested classes. "
+                   "A higher score indicates more resistance genes are present — each additional resistance "
+                   "gene increases the probability that fluoroquinolone resistance genes are also carried."
+    },
+    "clinical_risk_score": {
+        "label":   "Clinical Risk Score",
+        "biology": "Composite of prior hospitalization, diabetes diagnosis, and recurrent infection history "
+                   "(>2 prior infections). Risk factors compound: each additional factor multiplies antibiotic "
+                   "exposure history and the probability of harboring a resistant strain."
+    },
 }
 
 

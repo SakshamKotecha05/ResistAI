@@ -50,12 +50,28 @@ threshold     = joblib.load(THRESHOLD_PATH)  # float, e.g. 0.35
 
 print(f"[predict] Model loaded — {len(feature_names)} features, threshold={threshold:.2f}")
 
-# ── Create SHAP Explainer ─────────────────────────────────────────────────────
-# TreeExplainer is the fast, exact SHAP method for tree-based models (RF, XGBoost).
-# We create it once at startup — it's expensive to initialize but cheap to use.
-# check_additivity=False avoids a slow consistency check on each call.
+# ── Extract Base Estimator for SHAP ──────────────────────────────────────────
+# If the model is a CalibratedClassifierCV (probability calibration wrapper),
+# shap.TreeExplainer cannot use it directly — TreeExplainer only accepts raw
+# tree models (RandomForest, XGBoost), not sklearn pipeline wrappers.
+#
+# CalibratedClassifierCV stores its internal CV-fitted base estimators in
+# .estimators_. We take the first one for SHAP — all 5 have the same
+# hyperparameters so SHAP values are representative of the full model.
+#
+# predict_proba() still uses the full calibrated model (below in predict()),
+# so confidence scores remain calibrated. Only SHAP uses the base estimator.
 
-explainer = shap.TreeExplainer(model)
+# If the model is an IsotonicCalibratedModel wrapper, extract the base tree
+# model for SHAP. SHAP's TreeExplainer only works on raw tree models, not
+# wrappers. The base_model attribute points to the fitted RF or XGBoost.
+if hasattr(model, "base_model"):
+    shap_model = model.base_model
+    print("[predict] IsotonicCalibratedModel detected — using base_model for SHAP.")
+else:
+    shap_model = model
+
+explainer = shap.TreeExplainer(shap_model)
 print("[predict] SHAP TreeExplainer ready.")
 
 # ── Antibiotic Flags Accepted as API Input ───────────────────────────────────
@@ -126,6 +142,36 @@ def predict(input_data: dict) -> dict:
     for field in DEMOGRAPHIC_FIELDS:
         if field in input_data and input_data[field] is not None and field in row:
             row[field] = float(input_data[field])
+
+    # ── Step 3b: Compute engineered features ─────────────────────────────────
+    # These 6 features were created during training (preprocess.py) and must be
+    # recomputed here from the raw flags — the model learned from their real values,
+    # not zeros. Leaving them as 0 (as before) suppresses confidence significantly.
+
+    row["fluoro_cotrim_coresistance"] = float(
+        row.get("ofloxacin_resistance", 0) == 1 and
+        row.get("cotrimoxazole_resistance", 0) == 1
+    )
+    row["esbl_pattern"] = float(
+        row.get("ceftazidime_resistance", 0) == 1 and
+        row.get("augmentin_resistance", 0) == 1
+    )
+    row["extreme_resistance"] = float(
+        row.get("imipenem_resistance", 0) == 1 or
+        row.get("colistin_resistance", 0) == 1
+    )
+    row["aminoglycoside_coresistance"] = float(
+        row.get("gentamicin_resistance", 0) == 1 and
+        row.get("amikacin_resistance", 0) == 1
+    )
+    row["total_resistance_count"] = float(sum(
+        row.get(flag, 0) for flag in ANTIBIOTIC_FLAGS
+    ))
+    row["clinical_risk_score"] = float(
+        row.get("prior_hospitalization", 0) +
+        row.get("has_diabetes", 0) +
+        (1 if row.get("infection_freq", 0) > 2 else 0)
+    )
 
     # ── Step 4: Map species string → one-hot column ───────────────────────────
     # The training data one-hot encoded bacterial species like "Escherichia coli"
@@ -213,9 +259,18 @@ def predict(input_data: dict) -> dict:
             "direction":  "increases_risk" if shap_val > 0 else "decreases_risk"
         })
 
+    # Derive a display name — unwrap IsotonicCalibratedModel if present
+    _base_model = getattr(model, "base_model", model)
+    model_type = type(_base_model).__name__
+    if "XGB" in model_type:
+        model_name = "XGBoost + SHAP (calibrated)"
+    else:
+        model_name = "Random Forest + SHAP (calibrated)"
+
     return {
         "prediction":     prediction,
         "confidence":     round(prob, 4),
         "threshold_used": round(threshold, 2),
         "top_features":   top_features,
+        "model_name":     model_name,
     }
