@@ -13,6 +13,7 @@ import os
 import math
 import re
 import sys
+import joblib
 from typing import Optional
 from pathlib import Path
 
@@ -199,27 +200,27 @@ st.markdown(THEME_CSS, unsafe_allow_html=True)
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 EXAMPLE_PATIENT = {
-    "ofloxacin_resistance":       1,
-    "cotrimoxazole_resistance":   1,
+    "ofloxacin_resistance":       1,   # fluoroquinolone cross-resistance — strongest predictor
+    "cotrimoxazole_resistance":   0,
     "gentamicin_resistance":      1,
-    "amoxicillin_resistance":     1,
-    "ceftazidime_resistance":     0,
+    "amoxicillin_resistance":     0,
+    "ceftazidime_resistance":     1,
     "imipenem_resistance":        0,
     "augmentin_resistance":       1,
     "cefazolin_resistance":       1,
-    "cefoxitin_resistance":       0,
-    "amikacin_resistance":        0,
+    "cefoxitin_resistance":       1,
+    "amikacin_resistance":        1,
     "chloramphenicol_resistance": 1,
-    "nitrofurantoin_resistance":  0,
-    "colistin_resistance":        0,
+    "nitrofurantoin_resistance":  1,
+    "colistin_resistance":        1,   # last-resort resistance — key high-confidence driver
     "age_years":                  45.0,
     "is_female":                  1,
-    "has_diabetes":               1,
+    "has_diabetes":               0,
     "has_hypertension":           0,
     "prior_hospitalization":      1,
     "infection_freq":             3.0,
     "species":                    "Escherichia coli",
-    "location":                   "IFE-C",
+    "location":                   None,
 }
 
 BLANK_PATIENT = {
@@ -302,10 +303,12 @@ def make_gauge_svg(confidence: float, color: str) -> str:
     end_angle = math.pi * (1.0 - max(confidence, 0.01))
     ex = cx + r * math.cos(end_angle)
     ey = cy - r * math.sin(end_angle)
-    large_arc = 1 if confidence > 0.5 else 0
 
+    # The colored arc is always a fraction of the 180° semicircle, so it is
+    # always a small arc (< 180°). large_arc must be 0. Using 1 caused the bar
+    # to draw backwards (around the bottom) for confidence > 0.5.
     bg_path  = f"M {cx - r},{cy} A {r},{r} 0 1,1 {cx + r},{cy}"
-    val_path = f"M {cx - r},{cy} A {r},{r} 0 {large_arc},1 {ex:.2f},{ey:.2f}"
+    val_path = f"M {cx - r},{cy} A {r},{r} 0 0,1 {ex:.2f},{ey:.2f}"
 
     ticks = []
     for pct in (0.25, 0.5, 0.75):
@@ -340,7 +343,7 @@ def make_gauge_svg(confidence: float, color: str) -> str:
 
 # ── Verdict Card ──────────────────────────────────────────────────────────────
 
-def render_verdict_card(prediction: str, confidence: float, threshold: float):
+def render_verdict_card(prediction: str, confidence: float, threshold: float, model_name: str = "ML Classifier + SHAP"):
     is_resistant = prediction == "Resistant"
 
     if is_resistant:
@@ -393,7 +396,7 @@ def render_verdict_card(prediction: str, confidence: float, threshold: float):
         border:1px solid #1B3A6E;color:#3A5870;">threshold: {thr}</span>
       <span style="font-family:'JetBrains Mono',monospace;font-size:0.69rem;
         padding:3px 9px;border-radius:3px;background:rgba(27,58,110,0.45);
-        border:1px solid #1B3A6E;color:#3A5870;">Random Forest + SHAP</span>
+        border:1px solid #1B3A6E;color:#3A5870;">{model_name}</span>
     </div>
   </div>
   <div style="flex:0 0 190px;position:relative;z-index:1;">{gauge}</div>
@@ -472,13 +475,14 @@ def section_header(title: str, subtitle: str = ""):
 
 # ── Clinical Report ───────────────────────────────────────────────────────────
 
-def render_clinical_report(recommend: str, fallback: bool):
+def render_clinical_report(recommend: str, fallback: bool, error: str | None = None):
     if fallback:
+        error_detail = f"<br><span style='opacity:0.7;font-size:0.72rem;'>Error: {error}</span>" if error else ""
         st.markdown(
             '<div style="background:rgba(255,43,78,0.06);border:1px solid rgba(255,43,78,0.22);'
             'border-radius:4px;padding:8px 14px;font-size:0.77rem;color:#FF2B4E;margin-bottom:12px;'
             'font-family:\'Source Sans 3\',sans-serif;">'
-            '⚠ Groq API unavailable — SHAP analysis above is still valid.</div>',
+            f'⚠ Groq API unavailable — SHAP analysis above is still valid.{error_detail}</div>',
             unsafe_allow_html=True,
         )
 
@@ -513,10 +517,24 @@ def render_results(result: dict):
     top_feats  = result.get("top_features", [])
     recommend  = result.get("recommendation", "")
     model_used = result.get("model_used", "")
+    model_name = result.get("model_name", "ML Classifier + SHAP")
     fallback   = result.get("fallback_used", False)
     tokens     = result.get("prompt_tokens", 0)
+    llm_error  = result.get("error", None)
 
-    render_verdict_card(prediction, confidence, threshold)
+    render_verdict_card(prediction, confidence, threshold, model_name)
+
+    # Note on Intermediate class: per CLSI/EUCAST guidelines, Intermediate outcomes
+    # indicate the strain may respond only to higher doses or alternative agents —
+    # clinically equivalent to Resistant for empirical prescribing decisions.
+    # This model collapses Intermediate → Resistant to reflect that conservative standard.
+    st.markdown(
+        '<div style="font-family:\'Source Sans 3\',sans-serif;font-size:0.74rem;'
+        'color:#3A5870;margin:-14px 0 18px;padding:0 4px;">'
+        'Note: Intermediate susceptibility outcomes are classified as Resistant per CLSI/EUCAST '
+        'conservative prescribing guidelines.</div>',
+        unsafe_allow_html=True,
+    )
 
     col_shap, col_llm = st.columns([1, 1], gap="large")
 
@@ -526,7 +544,7 @@ def render_results(result: dict):
 
     with col_llm:
         section_header("Clinical Decision Support", "Llama 3.3 70B via Groq")
-        render_clinical_report(recommend, fallback)
+        render_clinical_report(recommend, fallback, llm_error)
 
     st.markdown(
         "<hr style='border:none;border-top:1px solid #0D1E3A;margin:24px 0 14px;'>",
@@ -547,6 +565,92 @@ def render_results(result: dict):
             for key, val in BLANK_PATIENT.items():
                 st.session_state[key] = val
             st.rerun()
+
+
+# ── Model Metrics Panel ───────────────────────────────────────────────────────
+
+def render_metrics_panel():
+    """
+    Loads ml/metrics.pkl (saved by train.py) and renders a compact model
+    performance panel. Shown only when metrics.pkl exists.
+    Uses st.expander so it doesn't crowd the main interface.
+    """
+    metrics_path = "ml/metrics.pkl"
+    if not os.path.exists(metrics_path):
+        return  # metrics not available yet (model not trained) — silently skip
+
+    try:
+        m = joblib.load(metrics_path)
+    except Exception:
+        return  # corrupted or incompatible pkl — silently skip
+
+    model_name = m.get("model_name", "ML Model")
+    cv_folds   = m.get("cv_folds", 5)
+
+    with st.expander(f"Model Performance — {model_name} ({cv_folds}-fold CV)", expanded=False):
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.markdown(
+                f'<div style="background:#0B1628;border:1px solid #1B3A6E;border-radius:6px;'
+                f'padding:14px 16px;text-align:center;">'
+                f'<div style="font-family:Rajdhani,sans-serif;font-size:0.65rem;font-weight:600;'
+                f'letter-spacing:0.16em;text-transform:uppercase;color:#3A5870;margin-bottom:6px;">'
+                f'Recall — Resistant (CV)</div>'
+                f'<div style="font-family:Rajdhani,sans-serif;font-size:1.8rem;font-weight:700;'
+                f'color:#FF2B4E;">{m.get("cv_recall_mean", 0):.4f}</div>'
+                f'<div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:#3A5870;">'
+                f'± {m.get("cv_recall_std", 0):.4f} · primary metric</div></div>',
+                unsafe_allow_html=True,
+            )
+
+        with col2:
+            st.markdown(
+                f'<div style="background:#0B1628;border:1px solid #1B3A6E;border-radius:6px;'
+                f'padding:14px 16px;text-align:center;">'
+                f'<div style="font-family:Rajdhani,sans-serif;font-size:0.65rem;font-weight:600;'
+                f'letter-spacing:0.16em;text-transform:uppercase;color:#3A5870;margin-bottom:6px;">'
+                f'ROC-AUC (CV)</div>'
+                f'<div style="font-family:Rajdhani,sans-serif;font-size:1.8rem;font-weight:700;'
+                f'color:#00D4FF;">{m.get("cv_roc_auc_mean", 0):.4f}</div>'
+                f'<div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:#3A5870;">'
+                f'± {m.get("cv_roc_auc_std", 0):.4f}</div></div>',
+                unsafe_allow_html=True,
+            )
+
+        with col3:
+            st.markdown(
+                f'<div style="background:#0B1628;border:1px solid #1B3A6E;border-radius:6px;'
+                f'padding:14px 16px;text-align:center;">'
+                f'<div style="font-family:Rajdhani,sans-serif;font-size:0.65rem;font-weight:600;'
+                f'letter-spacing:0.16em;text-transform:uppercase;color:#3A5870;margin-bottom:6px;">'
+                f'Hold-out ROC-AUC</div>'
+                f'<div style="font-family:Rajdhani,sans-serif;font-size:1.8rem;font-weight:700;'
+                f'color:#00F096;">{m.get("test_roc_auc", 0):.4f}</div>'
+                f'<div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:#3A5870;">'
+                f'independent test set</div></div>',
+                unsafe_allow_html=True,
+            )
+
+        # Confusion matrix
+        cm = m.get("confusion_matrix")
+        if cm:
+            tn, fp, fn, tp = cm[0][0], cm[0][1], cm[1][0], cm[1][1]
+            total_resistant  = fn + tp
+            recall_resistant = tp / total_resistant if total_resistant > 0 else 0
+            st.markdown(
+                f'<div style="margin-top:12px;font-family:\'Source Sans 3\',sans-serif;'
+                f'font-size:0.82rem;color:#6A8BA8;line-height:1.9;">'
+                f'Threshold: <span style="color:#C8DCEF;font-family:JetBrains Mono,monospace;">'
+                f'{m.get("threshold", 0.35):.2f}</span>'
+                f'&nbsp;·&nbsp;'
+                f'True Resistant caught: <span style="color:#00F096;">{tp} / {total_resistant} '
+                f'({recall_resistant*100:.1f}% recall)</span>'
+                f'&nbsp;·&nbsp;'
+                f'False alarms: <span style="color:#FF2B4E;">{fp}</span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
 
 # ── Empty State ───────────────────────────────────────────────────────────────
@@ -736,6 +840,8 @@ def main():
             result = run_local_recommend(input_data)
             if result:
                 st.session_state.result = result
+
+    render_metrics_panel()
 
     if st.session_state.result:
         render_results(st.session_state.result)
