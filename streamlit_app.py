@@ -442,7 +442,7 @@ def render_shap_chart(top_features: list):
         paper_bgcolor="#0B1628",
         font=dict(family="Source Sans 3", color="#C8DCEF"),
         height=195,
-        margin=dict(l=0, r=64, t=8, b=28),
+        margin=dict(l=180, r=64, t=8, b=28),
         bargap=0.42,
     )
 
