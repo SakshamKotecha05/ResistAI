@@ -1,65 +1,57 @@
 # ResistAI: Antibiotic Resistance Prediction & Clinical Decision Support
 
-> An AI-powered tool that predicts Ciprofloxacin resistance in bacterial isolates, explains the biological reasoning behind each prediction, and recommends alternative antibiotics in plain clinical language.
+> Predicts Ciprofloxacin resistance in bacterial isolates, explains the biological reasoning via SHAP, and generates plain-language clinical recommendations using an LLM: giving clinicians a tool they can actually act on.
 
 **Live demo:** https://resistai-2026.streamlit.app/
 
+---
+
 ## The Problem
 
-Antimicrobial resistance (AMR) is one of the most urgent threats in global healthcare. Bacteria evolve resistance faster than new antibiotics are developed, and clinicians must choose antibiotics under time pressure with incomplete resistance data.
+Antimicrobial resistance (AMR) kills 1.27 million people annually and is projected to surpass cancer as the leading cause of death by 2050. Clinicians must choose antibiotics under time pressure with incomplete resistance data, often defaulting to broad-spectrum drugs that accelerate resistance further.
 
-Existing tools predict resistance, but they don't explain *why*, and they don't tell the clinician *what to use instead*. ResistAI bridges that gap.
+Existing prediction tools output a binary label: Resistant or Susceptible, and stop there. They don't explain *why*, and they don't tell the clinician *what to prescribe instead*.
 
-## Innovation Angle
+---
 
-Most resistance prediction tools stop at a binary label: **Resistant** or **Susceptible**.
+## The Innovation
 
-ResistAI adds an **LLM-powered clinical decision layer** on top of the ML model:
+Most teams build a resistance classifier. ResistAI adds an **LLM-powered clinical decision-support layer** on top:
 
-1. A **Random Forest / XGBoost classifier** (auto-selected by ROC-AUC) predicts Ciprofloxacin resistance from a bacterial isolate's antibiotic profile and patient demographics
-2. **SHAP explainability** identifies which features drove the prediction: paired with a hand-built biology bridge that translates raw feature names into clinical English with one-sentence biological explanations
-3. **Groq's Llama 3.3 70B** takes the SHAP-grounded evidence and generates a clinical report: plain-language summary, ranked alternative antibiotics, and a risk flag ready for a patient's medical chart
+| Stage | What happens | Why it matters |
+|---|---|---|
+| **ML Classifier** | XGBoost predicts Ciprofloxacin resistance from antibiotic profile + demographics | Fast, interpretable classification |
+| **SHAP Explainability** | Top 3 features driving the prediction, each paired with a biological explanation | Clinicians trust what they can understand |
+| **Groq LLM (Llama 3.3 70B)** | Generates: clinical summary, ranked alternative antibiotics, chart-ready risk flag | Bridges ML output to clinical language |
 
 This is the pipeline clinicians actually need: not a black box, but a reasoning tool.
 
-## Pipeline
+---
 
-```
-Clinician Input (resistance profile + patient demographics)
-        │
-        ▼
-  streamlit_app.py  (single-process, no API server)
-        │
-        ├──► app/predict.py
-        │         ├── Random Forest / XGBoost Classifier
-        │         │     └── predict_proba() → Resistant / Susceptible + confidence
-        │         └── SHAP TreeExplainer
-        │               └── Top 3 features driving the prediction
-        │
-        ├──► app/utils.py  (SHAP-to-biology bridge)
-        │         └── Maps feature names → clinical labels + biological explanations
-        │
-        └──► app/llm.py
-                  └── Groq API (Llama 3.3 70B)
-                        └── Clinical Summary + Alternative Antibiotics + Risk Flag
-                                          │
-                                          ▼
-                              Streamlit UI (clinician-facing)
-```
+## Model Performance
+
+| Metric | Value |
+|---|---|
+| **Recall (clinical sensitivity)** | **83.0%**: catches 292 of 352 resistant cases in held-out test data |
+| ROC-AUC | 0.693 |
+| CV Recall (5-fold mean) | 62.7% ± 2.3% |
+| Classification threshold | 0.35 (tuned to maximize recall, precision floor ≥ 20%) |
+
+**Why recall over accuracy?** A false negative: missing a resistant case, means the patient receives an ineffective antibiotic. That causes treatment failure, longer hospital stays, and resistance spread. A false positive just triggers a broader-spectrum alternative: far less harmful. We optimize for sensitivity.
+
+---
 
 ## Setup
 
-**Prerequisites:** Python 3.10+, a [Groq API key](https://console.groq.com) (free tier)
+**Prerequisites:** Python 3.10+, a free [Groq API key](https://console.groq.com)
 
-**1. Clone the repository**
-
+**1. Clone the repo**
 ```bash
 git clone https://github.com/SakshamKotecha05/ResistAI
 cd ResistAI
 ```
 
-**2. Create and activate a virtual environment**
-
+**2. Create a virtual environment**
 ```bash
 python -m venv venv
 venv\Scripts\activate        # Windows
@@ -67,106 +59,123 @@ venv\Scripts\activate        # Windows
 ```
 
 **3. Install dependencies**
-
 ```bash
 pip install -r requirements.txt
 ```
 
 **4. Add your Groq API key**
 
-Create a `.env` file in the project root:
-
-```
-GROQ_API_KEY=gsk_your_key_here
-```
-
-**5. Train the model**
-
-```bash
-cd ml
-python train.py
+Create `.streamlit/secrets.toml`:
+```toml
+GROQ_API_KEY = "gsk_your_key_here"
 ```
 
-This reads the AMR datasets from `data/`, trains and compares Random Forest vs XGBoost, tunes the classification threshold, and saves `ml/model.pkl`, `ml/feature_names.pkl`, and `ml/threshold.pkl`.
-
-## Running the App
-
-From the project root (one terminal, one command):
-
+**5. Run the app**
 ```bash
 streamlit run streamlit_app.py
 ```
 
-UI opens at `http://localhost:8501`
+Opens at `http://localhost:8501`. Click **Load Example Patient** to see a demo instantly.
 
-> On Streamlit Community Cloud, deploy `streamlit_app.py` as the entry point and set `GROQ_API_KEY` in the Cloud secrets dashboard.
+> **Model artifacts** (`ml/model.pkl`, `ml/threshold.pkl`, etc.) are committed: no retraining required to run the app. To retrain from scratch: `cd ml && python train.py`.
+
+---
 
 ## Usage
 
-1. Open the app at `http://localhost:8501`
-2. In the sidebar, check every antibiotic the bacterial strain is **resistant to**
-3. Fill in patient demographics (age, sex, comorbidities, prior hospitalization)
-4. Select the bacterial species and sample collection location
-5. Click **Analyze Resistance**
+1. In the sidebar, check every antibiotic the bacterial strain is **resistant to**
+2. Fill in patient demographics (age, sex, comorbidities, prior hospitalization)
+3. Select bacterial species and sample location (optional)
+4. Click **Analyze Resistance**
 
 The results panel shows:
+- **Verdict card**: RESISTANT / SUSCEPTIBLE with confidence gauge
+- **SHAP feature analysis**: which factors drove the prediction with biological context
+- **Clinical Decision Support**: LLM-generated summary, alternative antibiotics, and a chart-ready risk flag
 
-- **Verdict card**: RESISTANT or SUSCEPTIBLE with confidence score and animated SVG gauge
-- **SHAP feature chart**: which factors drove the prediction and what they mean biologically
-- **Clinical Decision Support**: LLM-generated summary, alternative antibiotic options with drug class reasoning, and a chart-ready risk flag
+Use **Load Example Patient** to instantly load a confirmed-resistant *E. coli* isolate (87% confidence) for a live demo.
 
-Use **Load Example Patient** to instantly populate a demo case (E. coli, IFE-C, female/45/diabetic) that reliably produces a Resistant prediction.
+---
 
 ## Screenshots
 
-**Dashboard: empty state (no isolate loaded)**
-![Dashboard empty state](assets/screenshots/01-dashboard-empty.png)
-
-**Resistant prediction with SHAP feature analysis and clinical decision support**
+**Resistant prediction with SHAP analysis and clinical recommendation**
 ![Resistant prediction result](assets/screenshots/02-resistant-result.png)
 
-**Susceptible prediction**
-![Susceptible prediction result](assets/screenshots/03-susceptible-result.png)
+**Dashboard: empty state**
+![Dashboard empty state](assets/screenshots/01-dashboard-empty.png)
+
+---
 
 ## Dataset Sources
 
-| Dataset                          | Source                                     |
-| -------------------------------- | ------------------------------------------ |
-| Antimicrobial Resistance Dataset | [Mendeley Data](https://data.mendeley.com) |
-| Multi-Drug Resistance Profiles   | [Kaggle](https://www.kaggle.com)           |
+| Dataset | Source | Contents |
+|---|---|---|
+| Antimicrobial Resistance Dataset | [Mendeley Data](https://data.mendeley.com/datasets/w6pjrymhtv/2) | 274 bacterial isolates, antibiotic susceptibility outcomes (R/S/I), location metadata |
+| Multi-Drug Resistance Profiles | [Kaggle](https://www.kaggle.com/datasets/resumeforsachin/amr-antibiotics-prescription) | 10,710 patient records with full resistance profiles, demographics, species |
 
-Datasets are not committed to this repository. Download them and place CSV files in the `data/` directory before running `ml/train.py`.
+Datasets are not committed to this repo. Download them and place CSV files in `data/` before retraining.
+
+---
+
+## Pipeline
+
+```
+Clinician Input (resistance profile + demographics)
+        |
+        v
+  streamlit_app.py  (single process, no API server needed)
+        |
+        |---> app/predict.py
+        |         |-- XGBoost classifier: Resistant / Susceptible + confidence
+        |         `-- SHAP TreeExplainer: top 3 driving features
+        |
+        |---> app/utils.py
+        |         `-- SHAP-to-biology bridge: clinical labels + one-line explanations
+        |
+        `---> app/llm.py
+                  `-- Groq Llama 3.3 70B
+                        `-- Clinical Summary · Alternative Antibiotics · Risk Flag
+```
+
+---
 
 ## Tech Stack
 
-| Layer           | Technology              | Role                                                       |
-| --------------- | ----------------------- | ---------------------------------------------------------- |
-| Frontend + Host | Streamlit               | Clinical UI: pure Python, deployed on Streamlit Cloud      |
-| ML Model        | sklearn + XGBoost       | Resistance classification (auto-selects best by ROC-AUC)   |
-| Explainability  | SHAP (TreeExplainer)    | Feature importance with hand-built biological context      |
-| LLM Layer       | Groq API: Llama 3.3 70B | Clinical recommendation generation from SHAP evidence      |
-| Visualizations  | Plotly                  | Interactive SHAP bar chart                                 |
-| Data Processing | pandas, numpy           | Preprocessing and feature engineering                      |
+| Layer | Technology | Role |
+|---|---|---|
+| Frontend | Streamlit | Clinical UI: pure Python, zero JS |
+| ML Model | XGBoost + scikit-learn | Resistance classifier (auto-selected by CV recall) |
+| Explainability | SHAP TreeExplainer | Feature importance with biological context |
+| LLM Layer | Groq API: Llama 3.3 70B | Clinical language generation from SHAP evidence |
+| Visualizations | Plotly | Interactive SHAP bar chart |
+| Data Processing | pandas, numpy | Preprocessing and feature engineering |
+
+---
 
 ## Project Structure
 
 ```
 ResistAI/
-├── streamlit_app.py     # App entry point: imports app modules directly (no API server)
+├── streamlit_app.py       # App entry point
 ├── app/
-│   ├── predict.py       # ML inference + SHAP explanation engine
-│   ├── llm.py           # Groq clinical decision layer (prompt builder + fallback)
-│   └── utils.py         # SHAP-to-biology bridge (clinical labels + biological context)
+│   ├── predict.py         # ML inference + SHAP
+│   ├── llm.py             # Groq clinical decision layer
+│   └── utils.py           # SHAP-to-biology bridge
 ├── ml/
-│   ├── train.py         # Trains RF + XGBoost, tunes threshold, saves best model
-│   ├── preprocess.py    # Data cleaning and feature engineering
-│   └── *.pkl            # Saved model artifacts (model, feature_names, threshold)
-├── data/                # AMR datasets (gitignored: download separately)
+│   ├── train.py           # Training pipeline
+│   ├── preprocess.py      # Feature engineering
+│   ├── model.pkl          # Trained XGBoost model
+│   ├── threshold.pkl      # Tuned classification threshold (0.35)
+│   ├── feature_names.pkl  # Feature column order for inference
+│   └── metrics.pkl        # Evaluation metrics for UI display
+├── data/                  # AMR datasets (gitignored)
 ├── .streamlit/
-│   └── config.toml      # Streamlit theme config
-├── .env                 # API keys (gitignored: never committed)
+│   └── config.toml        # Theme config
 ├── requirements.txt
 └── README.md
 ```
 
-*Built for CodeCure @ IIT BHU SPIRIT 2026: Track B: Antibiotic Resistance Prediction*
+---
+
+*Built for **CodeCure @ IIT BHU SPIRIT 2026**: Track B: Antibiotic Resistance Prediction*
