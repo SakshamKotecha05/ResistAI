@@ -24,7 +24,7 @@ numpy==1.26.4            # Numerical operations used internally by ML libraries
 
 # LLM integration
 groq>=0.13.0             # Official Groq Python SDK for Llama 3.3 70B API calls
-httpx>=0.27.0,<0.28.0   # Pinned: groq SDK incompatible with httpx 0.28+ (proxies removal)
+# Pinned: groq SDK incompatible with httpx 0.28+ (proxies removal)
 
 # Utilities
 python-dotenv==1.0.1     # Load API keys from .env file safely
