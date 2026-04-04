@@ -355,6 +355,72 @@ def get_processed_data():
     X = X.apply(pd.to_numeric)
     y = combined["target"].astype(int)
 
+    # ── Feature Engineering ───────────────────────────────────────────────────
+    # These engineered features capture biological patterns that individual flags
+    # cannot express on their own. Added after the base features so they don't
+    # interfere with one-hot encoding or column alignment logic above.
+
+    # Group 1: Co-resistance interaction flags
+    # Ofloxacin + Co-trimoxazole both resistant — the strongest plasmid-linked
+    # co-resistance signal for Ciprofloxacin in gram-negative UTI pathogens.
+    X["fluoro_cotrim_coresistance"] = (
+        (X.get("ofloxacin_resistance", 0) == 1) &
+        (X.get("cotrimoxazole_resistance", 0) == 1)
+    ).astype(int)
+
+    # Ceftazidime + Augmentin both resistant — classic ESBL phenotype.
+    # ESBL strains frequently co-carry fluoroquinolone resistance on the same plasmid.
+    X["esbl_pattern"] = (
+        (X.get("ceftazidime_resistance", 0) == 1) &
+        (X.get("augmentin_resistance", 0) == 1)
+    ).astype(int)
+
+    # Imipenem OR Colistin resistant — last-resort antibiotic resistance.
+    # Almost always part of a pan-resistant or extensively drug-resistant profile.
+    X["extreme_resistance"] = (
+        (X.get("imipenem_resistance", 0) == 1) |
+        (X.get("colistin_resistance", 0) == 1)
+    ).astype(int)
+
+    # Gentamicin + Amikacin both resistant — high-level aminoglycoside resistance,
+    # frequently co-located with fluoroquinolone resistance genes on mobile elements.
+    X["aminoglycoside_coresistance"] = (
+        (X.get("gentamicin_resistance", 0) == 1) &
+        (X.get("amikacin_resistance", 0) == 1)
+    ).astype(int)
+
+    # Group 2: Multi-drug resistance score
+    # Sum of all 13 antibiotic resistance flags (range 0–13).
+    # A continuous proxy for MDR severity — more resistances = more resistance
+    # genes present = higher probability of carrying fluoroquinolone resistance.
+    antibiotic_cols = [
+        "imipenem_resistance", "ceftazidime_resistance", "gentamicin_resistance",
+        "augmentin_resistance", "amoxicillin_resistance", "cefazolin_resistance",
+        "cefoxitin_resistance", "amikacin_resistance", "ofloxacin_resistance",
+        "chloramphenicol_resistance", "cotrimoxazole_resistance",
+        "nitrofurantoin_resistance", "colistin_resistance",
+    ]
+    existing_ab_cols = [c for c in antibiotic_cols if c in X.columns]
+    X["total_resistance_count"] = X[existing_ab_cols].sum(axis=1)
+
+    # Group 3: Clinical risk score
+    # Combines the three strongest patient-level risk factors into one score (0–3).
+    # Risk factors compound: a hospitalised diabetic with recurrent infections is
+    # at far greater risk than a patient with only one factor.
+    X["clinical_risk_score"] = (
+        X.get("prior_hospitalization", 0) +
+        X.get("has_diabetes", 0) +
+        (X.get("infection_freq", 0) > 2).astype(int)
+    )
+
+    print(f"[FEATURES] Engineered 6 new features:")
+    print(f"  fluoro_cotrim_coresistance : {X['fluoro_cotrim_coresistance'].sum()} positive")
+    print(f"  esbl_pattern               : {X['esbl_pattern'].sum()} positive")
+    print(f"  extreme_resistance         : {X['extreme_resistance'].sum()} positive")
+    print(f"  aminoglycoside_coresistance: {X['aminoglycoside_coresistance'].sum()} positive")
+    print(f"  total_resistance_count     : mean={X['total_resistance_count'].mean():.2f}")
+    print(f"  clinical_risk_score        : mean={X['clinical_risk_score'].mean():.2f}")
+
     # Final class distribution
     total = len(y)
     n_resistant = y.sum()
