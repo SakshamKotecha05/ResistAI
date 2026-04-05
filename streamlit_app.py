@@ -473,6 +473,15 @@ def section_header(title: str, subtitle: str = ""):
     )
 
 
+def sidebar_section_header(title: str):
+    st.sidebar.markdown(
+        f'<div style="font-family:Rajdhani,sans-serif;font-size:0.68rem;font-weight:600;'
+        f'letter-spacing:0.16em;text-transform:uppercase;color:#6A8BA8;padding:12px 0 7px;">'
+        f'{title}</div>',
+        unsafe_allow_html=True,
+    )
+
+
 # ── Clinical Report ───────────────────────────────────────────────────────────
 
 def render_clinical_report(recommend: str, fallback: bool, error: str | None = None):
@@ -569,20 +578,39 @@ def render_results(result: dict):
 
 # ── Model Metrics Panel ───────────────────────────────────────────────────────
 
+def _metric_card_html(label: str, value: float, note: str, color: str) -> str:
+    return (
+        f'<div style="background:#0B1628;border:1px solid #1B3A6E;border-radius:6px;'
+        f'padding:14px 16px;text-align:center;">'
+        f'<div style="font-family:Rajdhani,sans-serif;font-size:0.65rem;font-weight:600;'
+        f'letter-spacing:0.16em;text-transform:uppercase;color:#3A5870;margin-bottom:6px;">'
+        f'{label}</div>'
+        f'<div style="font-family:Rajdhani,sans-serif;font-size:1.8rem;font-weight:700;'
+        f'color:{color};">{value:.4f}</div>'
+        f'<div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:#3A5870;">'
+        f'{note}</div></div>'
+    )
+
+
+@st.cache_data
+def _load_metrics(path: str):
+    try:
+        return joblib.load(path)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
 def render_metrics_panel():
     """
     Loads ml/metrics.pkl (saved by train.py) and renders a compact model
     performance panel. Shown only when metrics.pkl exists.
     Uses st.expander so it doesn't crowd the main interface.
     """
-    metrics_path = "ml/metrics.pkl"
-    if not os.path.exists(metrics_path):
-        return  # metrics not available yet (model not trained) — silently skip
-
-    try:
-        m = joblib.load(metrics_path)
-    except Exception:
-        return  # corrupted or incompatible pkl — silently skip
+    m = _load_metrics(str(_ROOT / "ml" / "metrics.pkl"))
+    if m is None:
+        return
 
     model_name = m.get("model_name", "ML Model")
     cv_folds   = m.get("cv_folds", 5)
@@ -591,46 +619,28 @@ def render_metrics_panel():
         col1, col2, col3 = st.columns(3)
 
         with col1:
-            st.markdown(
-                f'<div style="background:#0B1628;border:1px solid #1B3A6E;border-radius:6px;'
-                f'padding:14px 16px;text-align:center;">'
-                f'<div style="font-family:Rajdhani,sans-serif;font-size:0.65rem;font-weight:600;'
-                f'letter-spacing:0.16em;text-transform:uppercase;color:#3A5870;margin-bottom:6px;">'
-                f'Recall — Resistant (CV)</div>'
-                f'<div style="font-family:Rajdhani,sans-serif;font-size:1.8rem;font-weight:700;'
-                f'color:#FF2B4E;">{m.get("cv_recall_mean", 0):.4f}</div>'
-                f'<div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:#3A5870;">'
-                f'± {m.get("cv_recall_std", 0):.4f} · primary metric</div></div>',
-                unsafe_allow_html=True,
-            )
+            st.markdown(_metric_card_html(
+                "Recall — Resistant (CV)",
+                m.get("cv_recall_mean", 0),
+                f'± {m.get("cv_recall_std", 0):.4f} · primary metric',
+                "#FF2B4E",
+            ), unsafe_allow_html=True)
 
         with col2:
-            st.markdown(
-                f'<div style="background:#0B1628;border:1px solid #1B3A6E;border-radius:6px;'
-                f'padding:14px 16px;text-align:center;">'
-                f'<div style="font-family:Rajdhani,sans-serif;font-size:0.65rem;font-weight:600;'
-                f'letter-spacing:0.16em;text-transform:uppercase;color:#3A5870;margin-bottom:6px;">'
-                f'ROC-AUC (CV)</div>'
-                f'<div style="font-family:Rajdhani,sans-serif;font-size:1.8rem;font-weight:700;'
-                f'color:#00D4FF;">{m.get("cv_roc_auc_mean", 0):.4f}</div>'
-                f'<div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:#3A5870;">'
-                f'± {m.get("cv_roc_auc_std", 0):.4f}</div></div>',
-                unsafe_allow_html=True,
-            )
+            st.markdown(_metric_card_html(
+                "ROC-AUC (CV)",
+                m.get("cv_roc_auc_mean", 0),
+                f'± {m.get("cv_roc_auc_std", 0):.4f}',
+                "#00D4FF",
+            ), unsafe_allow_html=True)
 
         with col3:
-            st.markdown(
-                f'<div style="background:#0B1628;border:1px solid #1B3A6E;border-radius:6px;'
-                f'padding:14px 16px;text-align:center;">'
-                f'<div style="font-family:Rajdhani,sans-serif;font-size:0.65rem;font-weight:600;'
-                f'letter-spacing:0.16em;text-transform:uppercase;color:#3A5870;margin-bottom:6px;">'
-                f'Hold-out ROC-AUC</div>'
-                f'<div style="font-family:Rajdhani,sans-serif;font-size:1.8rem;font-weight:700;'
-                f'color:#00F096;">{m.get("test_roc_auc", 0):.4f}</div>'
-                f'<div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:#3A5870;">'
-                f'independent test set</div></div>',
-                unsafe_allow_html=True,
-            )
+            st.markdown(_metric_card_html(
+                "Hold-out ROC-AUC",
+                m.get("test_roc_auc", 0),
+                "independent test set",
+                "#00F096",
+            ), unsafe_allow_html=True)
 
         # Confusion matrix
         cm = m.get("confusion_matrix")
@@ -714,12 +724,7 @@ def render_sidebar() -> dict:
             st.session_state[key] = val
         st.rerun()
 
-    st.sidebar.markdown(
-        '<div style="font-family:Rajdhani,sans-serif;font-size:0.68rem;font-weight:600;'
-        'letter-spacing:0.16em;text-transform:uppercase;color:#6A8BA8;padding:14px 0 7px;">'
-        'Antibiotic Resistance Profile</div>',
-        unsafe_allow_html=True,
-    )
+    sidebar_section_header("Antibiotic Resistance Profile")
     st.sidebar.caption("Mark every antibiotic this strain is resistant to.")
 
     ab_fields = {
@@ -743,12 +748,7 @@ def render_sidebar() -> dict:
         antibiotic_values[field] = int(st.sidebar.checkbox(label, key=field))
 
     st.sidebar.divider()
-    st.sidebar.markdown(
-        '<div style="font-family:Rajdhani,sans-serif;font-size:0.68rem;font-weight:600;'
-        'letter-spacing:0.16em;text-transform:uppercase;color:#6A8BA8;padding:12px 0 7px;">'
-        'Patient Demographics</div>',
-        unsafe_allow_html=True,
-    )
+    sidebar_section_header("Patient Demographics")
 
     age              = st.sidebar.slider("Patient age (years)", 0, 100, key="age_years")
     is_female        = int(st.sidebar.checkbox("Female patient",        key="is_female"))
@@ -760,12 +760,7 @@ def render_sidebar() -> dict:
     )
 
     st.sidebar.divider()
-    st.sidebar.markdown(
-        '<div style="font-family:Rajdhani,sans-serif;font-size:0.68rem;font-weight:600;'
-        'letter-spacing:0.16em;text-transform:uppercase;color:#6A8BA8;padding:12px 0 7px;">'
-        'Bacterial Context</div>',
-        unsafe_allow_html=True,
-    )
+    sidebar_section_header("Bacterial Context")
 
     species = st.sidebar.selectbox(
         "Bacterial species",
